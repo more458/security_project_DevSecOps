@@ -1,0 +1,67 @@
+body.comer-body {
+    background-image: url('assets/img/donas.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    min-height: 100vh; /* Asegura que ocupe toda la altura visible */
+    margin: 0;
+    font-family: sans-serif;
+
+}
+
+.titulo{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.comer-h1{
+    text-align: center;
+}
+
+.expand-container {
+    width: 100%;
+    max-width: 600px;
+    margin: 1rem auto;
+    
+}
+
+.expand-toggle {
+    background-color: #bce2c7;
+    color: white;
+    padding: 1rem;
+    cursor: pointer;
+    border-radius: 8px;
+    text-align: center;
+    font-weight: bold;
+    font-size: 25px;
+    font-family: sans-serif;
+}
+
+
+.expand-box {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease, padding 0.3s;
+    background-color: #dbe9ec;
+    border-radius: 0 0 8px 8px;
+    padding: 0 1rem;
+    
+}
+
+.expand-box.open {
+    max-height: 500px;
+    padding: 1rem;
+}
+
+
+
+.expand-box ul {
+    list-style: disc inside;
+    padding-left: 1rem;
+}
+
+.expand-box li {
+    margin: 0.5rem 0;
+}

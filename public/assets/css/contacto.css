@@ -1,0 +1,28 @@
+/*CONTACTO*/
+.imagen-fondo {
+    /*background-image: url('tu-imagen.jpg'); /* Reemplazá con tu imagen */
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+
+    /*TAMAÑO DE LA IMAGEN*/
+    width: 100vw;
+    height: 100vh;
+
+    /*BLURREAR LA IMAGEN*/
+    filter: blur(2px); /* Cambiá el número para más/menos blur */
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: -1; /* Para que quede como fondo */
+  }
+
+.formulario-contenedor {
+    max-width: 800px;
+    background-color: rgba(255, 255, 255, 0.9); /* semi-transparente */
+  }
+
+.contact-h1{
+  text-align: center;
+  color: black;
+}

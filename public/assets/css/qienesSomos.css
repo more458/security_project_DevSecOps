@@ -1,0 +1,45 @@
+
+.quienes-h1{
+    text-align: center;
+    color: black;
+}
+
+.us{
+    display: flex;
+    justify-content: center; /* Centrado horizontal */
+    align-items: center;     /* Centrado vertical */
+    background-color: #f0f0f0;
+    margin-top: 30px;
+    margin-left: 100px;
+    margin-right: 100px;
+}
+
+.c{
+    padding: 20px;
+    background-color: #b3cee4;
+    border-radius: 10px;
+    font-family: sans-serif;
+}
+
+.historia{
+    padding: 20px;
+    background-color: #dfdea9;
+    border-radius: 10px;
+    font-family: sans-serif; 
+}
+
+.staff {
+    display: flex;
+    justify-content: center; /* Centrado horizontal */
+    align-items: center;     /* Centrado vertical */
+    background-color: #f0f0f0;
+    margin-top: 30px;
+    margin-left: 100px;
+    margin-right: 100px; 
+}
+
+.h2-staff{
+    text-align: center;
+    font-family: sans-serif;
+}
+
