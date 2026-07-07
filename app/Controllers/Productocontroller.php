@@ -167,6 +167,8 @@ class Productocontroller extends Controller
             $oldImagePath = FCPATH . 'assets/img/productos/producto_' . $prod->producto_id . '.jpg';
             // CAMBIO: Asegúrate de que 'default.jpg' sea el nombre de tu imagen por defecto y no se borre
             if (file_exists($oldImagePath) && basename($oldImagePath) !== 'default.jpg') {
+                // nosemgrep: php.lang.security.unlink-use.unlink-use
+                // Ruta construida server-side con FCPATH + ID entero de la BD, sin input del usuario.
                 unlink($oldImagePath); // Elimina el archivo físico de la imagen anterior
             }
 

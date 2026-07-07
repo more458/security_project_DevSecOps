@@ -24,6 +24,12 @@ services:
       MYSQL_DATABASE: mi_ecomerce
     ports:
       - "3306:3306"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run/mysqld
     volumes:
       - db_data:/var/lib/mysql
       - ./db_init:/docker-entrypoint-initdb.d

@@ -1,0 +1,20 @@
+# Framework CodeIgniter (código de terceros)
+system/
+
+# Dependencias
+vendor/
+node_modules/
+
+# Assets compilados / librerías JS de terceros
+public/assets/
+public/js/vendor/
+public/css/vendor/
+
+# Tests y builds
+tests/
+writable/
+build/
+
+# Archivos generados
+*.min.js
+*.min.css
