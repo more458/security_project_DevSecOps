@@ -1,0 +1,75 @@
+name: DevSecOps Secure Pipeline
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  # JOB 1: Escaneo de Secretos
+  secret-scan:
+    name: Secret Detection Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Gitleaks necesita el historial completo para revisar commits
+
+      - name: Run Gitleaks Scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # JOB 2: Análisis Estático de Código (SAST)
+  sast-scan:
+    name: PHP Static Application Security Testing
+    runs-on: ubuntu-latest
+    needs: secret-scan # Solo se ejecuta si el paso anterior fue exitoso
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep Scan
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/src" returntocorp/semgrep semgrep scan --config=auto --error
+
+  # JOB 3: Escaneo de Dependencias de Terceros (SCA)
+  sca-scan:
+    name: PHP Dependency Security Checker
+    runs-on: ubuntu-latest
+    needs: sast-scan
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Local PHP Security Checker
+        run: |
+          curl -sS https://get.symfony.com/cli/security-checker -o security-checker
+          chmod +x security-checker
+
+      - name: Check composer.lock for Vulnerabilities
+        run: ./security-checker security:check
+
+  # JOB 4: Construcción y Escaneo de la Imagen de Docker
+  docker-security:
+    name: Build and Scan Docker Image
+    runs-on: ubuntu-latest
+    needs: sca-scan
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build Local Docker Image
+        run: |
+          docker build -t mi-ecommerce-app:latest .
+
+      - name: Run Trivy Vulnerability Scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'mi-ecommerce-app:latest'
+          format: 'table'
+          exit-code: '1' # Hace que el pipeline falle si encuentra vulnerabilidades críticas/altas
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
