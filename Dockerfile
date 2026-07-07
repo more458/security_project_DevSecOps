@@ -1,7 +1,7 @@
 # --- Etapa 1: Construcción y Dependencias ---
 FROM php:8.2-fpm-alpine AS builder
 
-# BIEN DE DEVSECOPS: Actualizamos el SO base para parchear vulnerabilidades (ej. libxml2)
+#  Actualizamos el SO base para parchear vulnerabilidades (ej. libxml2)
 # AGREGAMOS 'icu-dev' A LAS DEPENDENCIAS E 'intl' A LAS EXTENSIONES DE PHP
 RUN apk upgrade --no-cache && \
     apk add --no-cache \
@@ -21,7 +21,7 @@ COPY . .
 # --- Etapa 2: Imagen Final de Producción (Segura) ---
 FROM php:8.2-fpm-alpine
 
-# BIEN DE DEVSECOPS: Actualizamos el SO base en la imagen final
+#  Actualizamos el SO base en la imagen final
 # AGREGAMOS 'icu-libs' PARA QUE LA EXTENSIÓN FUNCIONE EN PRODUCCIÓN
 RUN apk upgrade --no-cache && \
     apk add --no-cache nginx icu-libs
@@ -36,7 +36,7 @@ WORKDIR /var/www/html
 COPY --from=builder /var/www/html .
 COPY nginx.conf /etc/nginx/nginx.conf
 
-# BIEN DE DEVSECOPS: Crear un usuario no-root para correr la app
+#  Crear un usuario no-root para correr la app
 RUN addgroup -g 1001 appgroup && \
     adduser -u 1001 -G appgroup -D appuser
 
