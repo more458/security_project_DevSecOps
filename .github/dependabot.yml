@@ -1,6 +1,5 @@
 version: 2
 updates:
-  # Mantiene actualizadas las GitHub Actions pineadas a SHA
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -9,6 +8,8 @@ updates:
       time: "09:00"
       timezone: "America/Argentina/Buenos_Aires"
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "ci"
       include: "scope"
@@ -16,7 +17,6 @@ updates:
       - "dependencies"
       - "github-actions"
 
-  # Dependencias de PHP (Composer)
   - package-ecosystem: "composer"
     directory: "/"
     schedule:
@@ -25,20 +25,21 @@ updates:
       time: "09:00"
       timezone: "America/Argentina/Buenos_Aires"
     open-pull-requests-limit: 10
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
     commit-message:
       prefix: "deps"
       include: "scope"
     labels:
       - "dependencies"
       - "php"
-    # Agrupa actualizaciones menores y de parche en un solo PR
     groups:
       php-minor-and-patch:
         update-types:
           - "minor"
           - "patch"
 
-  # Dockerfile base image
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
@@ -46,6 +47,8 @@ updates:
       day: "monday"
       timezone: "America/Argentina/Buenos_Aires"
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "docker"
     labels:

@@ -164,13 +164,13 @@ class Productocontroller extends Controller
         // Verifica si se cargó un archivo de imagen válido y si no es un error de carga
         if ($img && $img->isValid() && !$img->hasMoved()) {
             // CAMBIO: Borrar la imagen anterior si existe y no es la imagen por defecto
-            $oldImagePath = FCPATH . 'assets/img/productos/producto_' . $prod->producto_id . '.jpg';
-            // CAMBIO: Asegúrate de que 'default.jpg' sea el nombre de tu imagen por defecto y no se borre
-            if (file_exists($oldImagePath) && basename($oldImagePath) !== 'default.jpg') {
-                // nosemgrep: php.lang.security.unlink-use.unlink-use
-                // Ruta construida server-side con FCPATH + ID entero de la BD, sin input del usuario.
-                unlink($oldImagePath); // Elimina el archivo físico de la imagen anterior
-            }
+            $oldImagePath = FCPATH . 'assets/img/productos/producto_' . (int) $prod->producto_id . '.jpg';
+
+        if (file_exists($oldImagePath) && basename($oldImagePath) !== 'default.jpg') {
+            // nosemgrep: php.lang.security.unlink-use.unlink-use
+            // Ruta construida server-side con FCPATH + ID entero de la BD. Sin input del usuario.
+            unlink($oldImagePath);
+        }
 
             // Mueve la nueva imagen con el ID del producto como nombre
             $newImageName = 'producto_' . $id . '.jpg'; // CAMBIO: Nombra la imagen con el ID del producto
