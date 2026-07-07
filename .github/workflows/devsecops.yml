@@ -46,11 +46,14 @@ jobs:
 
       - name: Install Local PHP Security Checker
         run: |
-          curl -sS https://get.symfony.com/cli/security-checker -o security-checker
+          curl -sSL -o security-checker \
+            https://github.com/fabpot/local-php-security-checker/releases/download/v2.1.3/local-php-security-checker_linux_amd64
           chmod +x security-checker
+          # Verifica que sea un binario real y no una página de error
+          file security-checker | grep -q ELF || { echo "Descarga inválida:"; head -c 500 security-checker; exit 1; }
 
       - name: Check composer.lock for Vulnerabilities
-        run: ./security-checker security:check
+        run: ./security-checker
 
   # JOB 4: Construcción y Escaneo de la Imagen de Docker
   docker-security:
