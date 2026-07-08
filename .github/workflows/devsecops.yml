@@ -85,8 +85,13 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
-
+          output: 'trivy-report.txt'
 
       - name: Show Trivy Report
-        if: always()   # se ejecuta incluso si el step anterior falló
-        run: cat trivy-report.txt
+        if: always()
+        run: |
+          if [ -f trivy-report.txt ]; then
+            cat trivy-report.txt
+          else
+            echo "⚠️  Trivy no generó reporte."
+          fi
