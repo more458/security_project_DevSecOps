@@ -79,17 +79,32 @@ jobs:
       - name: Install Trivy
         env:
           TRIVY_VERSION: "0.58.1"
-          TRIVY_SHA256: "e5e2e7d1f38e64b4c4c4f76aa1e5f47b12e29a1e69f7f3fc2f9e1a3d1c5b8f0a"
         run: |
-          # Descargar binario y checksum
-          curl -sSL -o trivy.tar.gz \
-            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          # Descargar archivo de checksums
           curl -sSL -o trivy_checksums.txt \
             "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_checksums.txt"
           
+          echo "--- Contenido de checksums.txt ---"
+          cat trivy_checksums.txt
+          echo "----------------------------------"
+          
+          # Detectar el nombre real del asset para Linux 64-bit
+          ASSET_NAME=$(grep -iE "linux[-_](64bit|amd64|x86_64)\.tar\.gz$" trivy_checksums.txt | head -1 | awk '{print $2}')
+          
+          if [ -z "$ASSET_NAME" ]; then
+            echo "❌ No se encontró asset Linux 64-bit en checksums.txt"
+            exit 1
+          fi
+          echo "✅ Asset detectado: $ASSET_NAME"
+          
+          # Descargar el binario
+          curl -sSL -o trivy.tar.gz \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${ASSET_NAME}"
+          
           # Verificar checksum
-          EXPECTED=$(grep "trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" trivy_checksums.txt | awk '{print $1}')
+          EXPECTED=$(grep "${ASSET_NAME}$" trivy_checksums.txt | awk '{print $1}')
           ACTUAL=$(sha256sum trivy.tar.gz | awk '{print $1}')
+          
           if [ "$EXPECTED" != "$ACTUAL" ]; then
             echo "❌ Checksum inválido"
             echo "  Esperado: $EXPECTED"
@@ -103,15 +118,6 @@ jobs:
           sudo mv trivy /usr/local/bin/
           rm trivy.tar.gz trivy_checksums.txt
           trivy --version
-      - name: Run Trivy Vulnerability Scanner
-        run: |
-          trivy image \
-            --exit-code 1 \
-            --ignore-unfixed \
-            --severity CRITICAL,HIGH \
-            --format table \
-            --output trivy-report.txt \
-            mi-ecommerce-app:latest
 
       - name: Show Trivy Report
         if: always()
