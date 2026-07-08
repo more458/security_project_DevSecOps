@@ -44,15 +44,23 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
+      - name: Setup PHP
+        uses: shivammathur/setup-php@9e72090525849c5e82e596468b86eb55e9cc5401  # v2.32.0
+        with:
+          php-version: '8.1'
+          tools: composer
+
+      - name: Install production dependencies only
+        run: composer install --no-dev --no-scripts --no-progress --prefer-dist
+
       - name: Install Local PHP Security Checker
         run: |
           curl -sSL -o security-checker \
             https://github.com/fabpot/local-php-security-checker/releases/download/v2.1.3/local-php-security-checker_linux_amd64
           chmod +x security-checker
-          # Verifica que sea un binario real y no una página de error
-          file security-checker | grep -q ELF || { echo "Descarga inválida:"; head -c 500 security-checker; exit 1; }
+          file security-checker | grep -q ELF || { echo "Descarga inválida"; head -c 500 security-checker; exit 1; }
 
-      - name: Check composer.lock for Vulnerabilities
+      - name: Check composer.lock for Vulnerabilities (production only)
         run: ./security-checker
 
   # JOB 4: Construcción y Escaneo de la Imagen de Docker
