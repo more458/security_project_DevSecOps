@@ -7,7 +7,7 @@
  * the bootstrap process and is called during the framework's
  * execution.
  *
- * This can be looked at as a `master helper` file that is
+ * This can be looked at as a `master helper` file that i
  * loaded early on, and may also contain additional functions
  * that you'd like to use throughout your entire application
  *
