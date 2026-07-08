@@ -78,7 +78,7 @@ jobs:
           docker build -t mi-ecommerce-app:latest .
 
       - name: Run Trivy Vulnerability Scanner
-        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4  # 0.33.1
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # 0.33.1
         env:
           TRIVY_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
