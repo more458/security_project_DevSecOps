@@ -78,7 +78,7 @@ jobs:
 
       - name: Install Trivy
         env:
-          TRIVY_VERSION: "0.58.1"
+          TRIVY_VERSION: "0.72.0"
         run: |
           # Descargar archivo de checksums
           curl -sSL -o trivy_checksums.txt \
