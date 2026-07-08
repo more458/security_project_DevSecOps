@@ -85,3 +85,8 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
+
+
+      - name: Show Trivy Report
+        if: always()   # se ejecuta incluso si el step anterior falló
+        run: cat trivy-report.txt
