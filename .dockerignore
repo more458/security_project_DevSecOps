@@ -1,0 +1,51 @@
+# Control de versiones
+.git
+.gitignore
+.gitattributes
+
+# Secretos y config local
+.env
+.env.*
+!.env.example
+
+# Dependencias (se instalan dentro del contenedor)
+vendor/
+node_modules/
+
+# Tests y herramientas de dev
+tests/
+phpunit.xml*
+phpstan.neon*
+.phpunit.*
+rector.php
+
+# Documentación
+README.md
+CHANGELOG.md
+docs/
+*.md
+
+# IDE y SO
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# CI/CD y seguridad (no deben viajar en la imagen)
+.github/
+.semgrepignore
+.gitleaks.toml
+
+# Caché y logs de CI4
+writable/cache/*
+writable/logs/*
+writable/session/*
+!writable/cache/.gitkeep
+!writable/logs/.gitkeep
+!writable/session/.gitkeep
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore

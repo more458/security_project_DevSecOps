@@ -1,57 +1,84 @@
-# --- Etapa 1: Construcción y Dependencias ---
+# syntax=docker/dockerfile:1.7
+
+# --- Etapa 1: Composer (instala dependencias PHP sin dev) ---
+FROM composer:2.7 AS vendor
+
+WORKDIR /app
+
+# Copiamos solo lo mínimo para maximizar el cache de Docker
+COPY composer.json composer.lock ./
+
+# Instalación reproducible, sin dev, con autoloader optimizado
+RUN composer install \
+    --no-dev \
+    --no-scripts \
+    --no-autoloader \
+    --prefer-dist \
+    --no-interaction \
+    --no-progress
+
+# --- Etapa 2: Builder de extensiones PHP ---
 FROM php:8.2-fpm-alpine AS builder
 
-#  Actualizamos el SO base para parchear vulnerabilidades (ej. libxml2)
-# AGREGAMOS 'icu-dev' A LAS DEPENDENCIAS E 'intl' A LAS EXTENSIONES DE PHP
 RUN apk upgrade --no-cache && \
     apk add --no-cache \
-    bash \
-    libpng-dev \
-    libjpeg-turbo-dev \
-    freetype-dev \
-    icu-dev \
+        libpng-dev \
+        libjpeg-turbo-dev \
+        freetype-dev \
+        icu-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install pdo_mysql gd mysqli intl
+    && docker-php-ext-install -j$(nproc) pdo_mysql gd mysqli intl
 
-WORKDIR /var/www/html
-
-# Copiar el código del e-commerce al contenedor
-COPY . .
-
-# --- Etapa 2: Imagen Final de Producción (Segura) ---
+# --- Etapa 3: Imagen final de producción ---
 FROM php:8.2-fpm-alpine
 
-#  Actualizamos el SO base en la imagen final
-# AGREGAMOS 'icu-libs' PARA QUE LA EXTENSIÓN FUNCIONE EN PRODUCCIÓN
+# Parcheamos el SO base
 RUN apk upgrade --no-cache && \
-    apk add --no-cache nginx icu-libs
+    apk add --no-cache nginx icu-libs libpng libjpeg-turbo freetype curl
 
-# Copiar las extensiones de PHP que compilamos en la etapa anterior
+# Copiamos extensiones PHP compiladas en el builder
 COPY --from=builder /usr/local/lib/php/extensions /usr/local/lib/php/extensions
 COPY --from=builder /usr/local/etc/php/conf.d /usr/local/etc/php/conf.d
 
 WORKDIR /var/www/html
 
-# Copiar el código limpio desde la etapa de construcción
-COPY --from=builder /var/www/html .
+# Copiamos el código de la app (respetando .dockerignore)
+COPY . .
+
+# Copiamos vendor/ desde la etapa de Composer
+COPY --from=vendor /app/vendor ./vendor
+
+# Regeneramos el autoloader ahora que tenemos todo el código
+RUN apk add --no-cache --virtual .build-deps composer && \
+    composer dump-autoload --no-dev --optimize --classmap-authoritative && \
+    apk del .build-deps && \
+    rm -rf /root/.composer
+
+# Config de Nginx
 COPY nginx.conf /etc/nginx/nginx.conf
 
-#  Crear un usuario no-root para correr la app
+# Usuario no-root
 RUN addgroup -g 1001 appgroup && \
     adduser -u 1001 -G appgroup -D appuser
 
-# Crear los directorios temporales de Nginx y forzar la creación de la caché de CodeIgniter
+# Directorios que Nginx y CI4 necesitan escribir
 RUN mkdir -p /var/lib/nginx/tmp /var/log/nginx /run/nginx \
-    /var/www/html/writable/cache /var/www/html/writable/logs /var/www/html/writable/session
+             /var/www/html/writable/cache \
+             /var/www/html/writable/logs \
+             /var/www/html/writable/session \
+    && chown -R appuser:appgroup /var/www/html/writable \
+                                  /var/lib/nginx \
+                                  /var/log/nginx \
+                                  /run/nginx \
+    && chmod -R 775 /var/www/html/writable
 
-# Dar permisos de escritura a appuser SOLO donde es estrictamente necesario
-RUN chown -R appuser:appgroup /var/www/html/writable /var/lib/nginx /var/log/nginx /run/nginx && \
-    chmod -R 775 /var/www/html/writable
-
-# Cambiar al usuario seguro
 USER appuser
 
-EXPOSE 80
+# 8080 en vez de 80: los puertos <1024 requieren root
+EXPOSE 8080
 
-# Comando para iniciar tanto PHP-FPM como Nginx en el mismo contenedor
+# Healthcheck: si esto falla, ECS/Docker reinicia el contenedor
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -fsS http://localhost:8080/ || exit 1
+
 CMD ["sh", "-c", "php-fpm -D && nginx -g 'daemon off;'"]

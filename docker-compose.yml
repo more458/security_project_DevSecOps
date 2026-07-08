@@ -1,38 +1,46 @@
-version: '3.8'
-
 services:
   ecommerce:
     build: .
     container_name: ecommerce_app
     ports:
-      - "8080:80" # Podrás ver tu app en http://localhost:8080
+      - "8080:8080"
     environment:
-      - ENVIRONMENT=development
-      # Buenas prácticas: El código de CodeIgniter debería leer esto en vez de credenciales hardcodeadas
-      - DB_HOST=db
-      - DB_USER=root
-      - DB_PASS=secreto123
-      - DB_NAME=mi_ecomerce
+      # CodeIgniter 4 lee estas variables directamente
+      - CI_ENVIRONMENT=${CI_ENVIRONMENT:-development}
+      - database.default.hostname=db
+      - database.default.database=${MYSQL_DATABASE}
+      - database.default.username=${MYSQL_USER}
+      - database.default.password=${MYSQL_PASSWORD}
+      - database.default.DBDriver=MySQLi
+      - database.default.port=3306
+      - encryption.key=${ENCRYPTION_KEY}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    restart: unless-stopped
 
   db:
     image: mysql:8.0
     container_name: ecommerce_db
     environment:
-      MYSQL_ROOT_PASSWORD: secreto123
-      MYSQL_DATABASE: mi_ecomerce
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     ports:
       - "3306:3306"
     security_opt:
       - no-new-privileges:true
-    read_only: true
-    tmpfs:
-      - /tmp
-      - /run/mysqld
     volumes:
       - db_data:/var/lib/mysql
       - ./db_init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
 
 volumes:
   db_data:
