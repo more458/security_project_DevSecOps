@@ -63,7 +63,7 @@ jobs:
       - name: Check composer.lock for Vulnerabilities (production only)
         run: ./security-checker --path=prod-scan/composer.lock
 
-        
+
   # JOB 4: Construcción y Escaneo de la Imagen de Docker
   docker-security:
     name: Build and Scan Docker Image
@@ -78,10 +78,10 @@ jobs:
           docker build -t mi-ecommerce-app:latest .
 
       - name: Run Trivy Vulnerability Scanner
-        uses: aquasecurity/trivy-action@6c175e9c4083a92bbca2f9724c8a5e33bc2d97a5  # 0.30.0
+        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4  # 0.33.1
         with:
           image-ref: 'mi-ecommerce-app:latest'
           format: 'table'
-          exit-code: '1' # Hace que el pipeline falle si encuentra vulnerabilidades críticas/altas
+          exit-code: '1'
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
