@@ -44,15 +44,6 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
-      - name: Setup PHP
-        uses: shivammathur/setup-php@9e72090525849c5e82e596468b86eb55e9cc5401  # v2.32.0
-        with:
-          php-version: '8.1'
-          tools: composer
-
-      - name: Install production dependencies only
-        run: composer install --no-dev --no-scripts --no-progress --prefer-dist
-
       - name: Install Local PHP Security Checker
         run: |
           curl -sSL -o security-checker \
@@ -60,9 +51,19 @@ jobs:
           chmod +x security-checker
           file security-checker | grep -q ELF || { echo "Descarga inválida"; head -c 500 security-checker; exit 1; }
 
-      - name: Check composer.lock for Vulnerabilities (production only)
-        run: ./security-checker
+      - name: Generate production-only lock
+        run: |
+          # Copia el lock a un directorio temporal y quita packages-dev
+          mkdir -p prod-scan
+          jq 'del(."packages-dev")' composer.lock > prod-scan/composer.lock
+          # El checker también necesita un composer.json presente
+          cp composer.json prod-scan/composer.json
+          echo "Paquetes de dev filtrados. Escaneando solo producción."
 
+      - name: Check composer.lock for Vulnerabilities (production only)
+        run: ./security-checker --path=prod-scan/composer.lock
+
+        
   # JOB 4: Construcción y Escaneo de la Imagen de Docker
   docker-security:
     name: Build and Scan Docker Image
