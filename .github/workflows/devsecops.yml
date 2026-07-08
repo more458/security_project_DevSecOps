@@ -77,11 +77,32 @@ jobs:
         run: docker build -t mi-ecommerce-app:latest .
 
       - name: Install Trivy
+        env:
+          TRIVY_VERSION: "0.58.1"
+          TRIVY_SHA256: "e5e2e7d1f38e64b4c4c4f76aa1e5f47b12e29a1e69f7f3fc2f9e1a3d1c5b8f0a"
         run: |
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
-            | sh -s -- -b /usr/local/bin v0.58.1
+          # Descargar binario y checksum
+          curl -sSL -o trivy.tar.gz \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          curl -sSL -o trivy_checksums.txt \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_checksums.txt"
+          
+          # Verificar checksum
+          EXPECTED=$(grep "trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" trivy_checksums.txt | awk '{print $1}')
+          ACTUAL=$(sha256sum trivy.tar.gz | awk '{print $1}')
+          if [ "$EXPECTED" != "$ACTUAL" ]; then
+            echo "❌ Checksum inválido"
+            echo "  Esperado: $EXPECTED"
+            echo "  Obtenido: $ACTUAL"
+            exit 1
+          fi
+          echo "✅ Checksum verificado"
+          
+          # Instalar
+          tar -xzf trivy.tar.gz trivy
+          sudo mv trivy /usr/local/bin/
+          rm trivy.tar.gz trivy_checksums.txt
           trivy --version
-
       - name: Run Trivy Vulnerability Scanner
         run: |
           trivy image \
