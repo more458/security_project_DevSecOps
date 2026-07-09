@@ -35,11 +35,53 @@ jobs:
         run: |
           docker run --rm -v "${{ github.workspace }}:/src" returntocorp/semgrep semgrep scan --config=auto --error
 
-  # JOB 3: Escaneo de Dependencias de Terceros (SCA)
+  # JOB 3: Escaneo de Infraestructura como Código (IaC)
+  iac-scan:
+    name: IaC Security Scan (Checkov)
+    runs-on: ubuntu-latest
+    needs: secret-scan   # Paralelo con sast-scan
+    permissions:
+      contents: read
+      security-events: write   # Necesario para subir SARIF a Security tab
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Setup Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: '3.12'
+
+      - name: Install Checkov
+        run: |
+          python -m pip install --upgrade pip
+          pip install checkov==3.2.334
+
+      - name: Run Checkov Scan
+        id: checkov
+        continue-on-error: true   # soft-fail: no rompe el pipeline mientras iteramos findings
+        run: |
+          checkov \
+            --directory . \
+            --framework dockerfile,docker_compose,github_actions \
+            --config-file .checkov.yaml \
+            --output cli \
+            --output sarif \
+            --output-file-path console,checkov-results.sarif \
+            --soft-fail
+
+      - name: Upload SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@181d5eefc20863364f96762470ba6f862bdef56b  # v3.29.2
+        with:
+          sarif_file: checkov-results.sarif
+          category: checkov
+
+  # JOB 4: Escaneo de Dependencias de Terceros (SCA)
   sca-scan:
     name: PHP Dependency Security Checker
     runs-on: ubuntu-latest
-    needs: sast-scan
+    needs: [sast-scan, iac-scan]
     steps:
       - name: Checkout Code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
@@ -64,7 +106,7 @@ jobs:
         run: ./security-checker --path=prod-scan/composer.lock
 
 
-  # JOB 4: Construcción y Escaneo de la Imagen de Docker
+  # JOB 5: Construcción y Escaneo de la Imagen de Docker
   docker-security:
     name: Build and Scan Docker Image
     runs-on: ubuntu-latest

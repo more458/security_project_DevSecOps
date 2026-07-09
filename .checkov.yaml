@@ -1,0 +1,31 @@
+# Configuración de Checkov para el proyecto e-commerce DevSecOps
+# https://www.checkov.io/2.Basics/CLI%20Command%20Reference.html
+
+# Frameworks a escanear (los mismos que pasamos por CLI, aquí como fallback)
+framework:
+  - dockerfile
+  - docker_compose
+  - github_actions
+
+# Directorios/archivos excluidos del escaneo
+skip-path:
+  - system/          # CodeIgniter 4 core, no lo controlamos
+  - vendor/          # dependencias de Composer
+  - node_modules/
+  - writable/
+  - tests/
+  - .git/
+
+# Checks silenciados con justificación
+# (Iremos agregando estos IDs a medida que Checkov nos marque cosas y decidamos aceptarlas)
+skip-check: []
+  # Ejemplo cuando decidas aceptar uno:
+  # - CKV_DOCKER_2   # Healthcheck ya definido en docker-compose.yml, no en Dockerfile
+
+# Formato de salida por defecto
+compact: true
+quiet: false
+
+# Nivel mínimo de severidad a reportar
+# LOW | MEDIUM | HIGH | CRITICAL
+# Recomendado: dejar todo activo al inicio, filtrar después
