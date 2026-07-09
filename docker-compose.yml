@@ -7,13 +7,14 @@ services:
     environment:
       # CodeIgniter 4 lee estas variables directamente
       - CI_ENVIRONMENT=${CI_ENVIRONMENT:-development}
+      - app.baseURL=http://localhost:8080/
       - database.default.hostname=db
       - database.default.database=${MYSQL_DATABASE}
       - database.default.username=${MYSQL_USER}
       - database.default.password=${MYSQL_PASSWORD}
       - database.default.DBDriver=MySQLi
       - database.default.port=3306
-      - encryption.key=${ENCRYPTION_KEY}
+      - encryption.key=${APP_ENCRYPTION_KEY}
     depends_on:
       db:
         condition: service_healthy

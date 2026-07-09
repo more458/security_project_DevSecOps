@@ -5,17 +5,19 @@ FROM composer:2.7 AS vendor
 
 WORKDIR /app
 
-# Copiamos solo lo mínimo para maximizar el cache de Docker
 COPY composer.json composer.lock ./
 
-# Instalación reproducible, sin dev, con autoloader optimizado
 RUN composer install \
     --no-dev \
     --no-scripts \
     --no-autoloader \
     --prefer-dist \
     --no-interaction \
-    --no-progress
+    --no-progress \
+    --ignore-platform-req=ext-intl \
+    --ignore-platform-req=ext-mysqli \
+    --ignore-platform-req=ext-gd \
+    --ignore-platform-req=ext-pdo_mysql
 
 # --- Etapa 2: Builder de extensiones PHP ---
 FROM php:8.2-fpm-alpine AS builder
