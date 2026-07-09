@@ -66,24 +66,40 @@ jobs:
         id: checkov
         continue-on-error: true
         run: |
+          echo "=== Directorio ANTES de correr Checkov ==="
+          pwd
+          ls -la
+          
+          echo "=== Corriendo Checkov ==="
           checkov \
             --directory . \
             --framework dockerfile,docker_compose,github_actions \
-            --config-file .checkov.yaml \
             --output cli \
             --output sarif \
-            --output-file-path console,. \
-            --soft-fail
-          # Checkov genera 'results_sarif.sarif' en el directorio indicado; lo renombramos
-          if [ -f results_sarif.sarif ]; then
-            mv results_sarif.sarif checkov-results.sarif
-            echo "✅ SARIF generado correctamente"
+            --output-file-path console,checkov_output \
+            --soft-fail || true
+          
+          echo "=== Directorio DESPUÉS de correr Checkov ==="
+          ls -la
+          
+          echo "=== Buscando archivos SARIF en TODO el repo ==="
+          find . -name "*.sarif" -type f 2>/dev/null || echo "No se encontraron archivos .sarif"
+          
+          echo "=== Contenido de checkov_output/ si existe ==="
+          ls -la checkov_output/ 2>/dev/null || echo "checkov_output/ no existe"
+          
+          echo "=== Renombrando el SARIF que encontremos ==="
+          SARIF_FILE=$(find . -name "*.sarif" -type f | head -1)
+          if [ -n "$SARIF_FILE" ]; then
+            cp "$SARIF_FILE" checkov-results.sarif
+            echo "✅ Copiado desde: $SARIF_FILE"
           else
-            echo "⚠️  Checkov no generó SARIF, creando archivo vacío"
+            echo "⚠️ Creando SARIF vacío como fallback"
             echo '{"version":"2.1.0","$schema":"https://json.schemastore.org/sarif-2.1.0.json","runs":[]}' > checkov-results.sarif
           fi
+          
           ls -la checkov-results.sarif
-
+          
       - name: Upload SARIF to GitHub Security
         if: always()
         uses: github/codeql-action/upload-sarif@181d5eefc20863364f96762470ba6f862bdef56b  # v3.29.2
