@@ -4,8 +4,9 @@
 # Frameworks a escanear (los mismos que pasamos por CLI, aquí como fallback)
 framework:
   - dockerfile
-  - docker_compose
   - github_actions
+  - secrets
+
 
 # Directorios/archivos excluidos del escaneo
 skip-path:

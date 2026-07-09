@@ -66,39 +66,30 @@ jobs:
         id: checkov
         continue-on-error: true
         run: |
-          echo "=== Directorio ANTES de correr Checkov ==="
-          pwd
-          ls -la
+          mkdir -p checkov_output
           
           echo "=== Corriendo Checkov ==="
           checkov \
             --directory . \
-            --framework dockerfile,docker_compose,github_actions \
+            --framework dockerfile github_actions secrets \
             --output cli \
             --output sarif \
             --output-file-path console,checkov_output \
             --soft-fail || true
           
-          echo "=== Directorio DESPUÉS de correr Checkov ==="
-          ls -la
+          echo "=== Buscando el SARIF generado ==="
+          find checkov_output -type f
           
-          echo "=== Buscando archivos SARIF en TODO el repo ==="
-          find . -name "*.sarif" -type f 2>/dev/null || echo "No se encontraron archivos .sarif"
-          
-          echo "=== Contenido de checkov_output/ si existe ==="
-          ls -la checkov_output/ 2>/dev/null || echo "checkov_output/ no existe"
-          
-          echo "=== Renombrando el SARIF que encontremos ==="
-          SARIF_FILE=$(find . -name "*.sarif" -type f | head -1)
-          if [ -n "$SARIF_FILE" ]; then
+          SARIF_FILE=$(find checkov_output -name "*.sarif" -type f | head -1)
+          if [ -n "$SARIF_FILE" ] && [ -s "$SARIF_FILE" ]; then
             cp "$SARIF_FILE" checkov-results.sarif
-            echo "✅ Copiado desde: $SARIF_FILE"
+            echo "✅ SARIF real copiado desde: $SARIF_FILE"
+            echo "Tamaño: $(wc -c < checkov-results.sarif) bytes"
           else
-            echo "⚠️ Creando SARIF vacío como fallback"
-            echo '{"version":"2.1.0","$schema":"https://json.schemastore.org/sarif-2.1.0.json","runs":[]}' > checkov-results.sarif
+            echo "❌ Checkov no generó SARIF válido"
+            exit 1
           fi
-          
-          ls -la checkov-results.sarif
+
           
       - name: Upload SARIF to GitHub Security
         if: always()
