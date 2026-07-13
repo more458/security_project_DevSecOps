@@ -20,7 +20,7 @@ RUN composer install \
     --ignore-platform-req=ext-pdo_mysql
 
 # --- Etapa 2: Builder de extensiones PHP ---
-FROM php:8.2-fpm-alpine AS builder
+FROM php:8.4-fpm-alpine AS builder
 
 RUN apk upgrade --no-cache && \
     apk add --no-cache \
@@ -32,7 +32,7 @@ RUN apk upgrade --no-cache && \
     && docker-php-ext-install -j$(nproc) pdo_mysql gd mysqli intl
 
 # --- Etapa 3: Imagen final de producción ---
-FROM php:8.2-fpm-alpine
+FROM php:8.4-fpm-alpine
 
 # Parcheamos el SO base
 RUN apk upgrade --no-cache && \
