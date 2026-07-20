@@ -1,0 +1,26 @@
+# Directorio de trabajo de Terraform (plugins descargados, etc.)
+.terraform/
+.terraform.lock.hcl
+
+# State files — contienen la infra completa, no van al repo
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# Archivos de variables con valores reales
+*.tfvars
+*.tfvars.json
+!example.tfvars
+
+# Planes generados
+*.tfplan
+
+# Crash logs
+crash.log
+crash.*.log
+
+# Override files (para desarrollo local)
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
