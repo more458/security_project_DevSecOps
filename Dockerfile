@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # --- Etapa 1: Composer (instala dependencias PHP sin dev) ---
-FROM composer:2.7 AS vendor
+FROM composer:2.10 AS vendor
 
 WORKDIR /app
 
