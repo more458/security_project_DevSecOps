@@ -15,3 +15,21 @@ variable "environment" {
   type        = string
   default     = "dev"
 }
+
+variable "db_name" {
+  description = "Nombre de la base de datos"
+  type        = string
+  default     = "mi_ecomerce"
+}
+
+variable "db_username" {
+  description = "Usuario administrador de la base de datos"
+  type        = string
+  default     = "ecommerce_app"
+}
+
+variable "db_password" {
+  description = "Contraseña de la base de datos (se pasa por variable, nunca hardcodeada)"
+  type        = string
+  sensitive   = true
+}

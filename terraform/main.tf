@@ -276,3 +276,59 @@ resource "aws_security_group" "db" {
     ManagedBy   = "Terraform"
   }
 }
+
+# ============================================================
+# DB SUBNET GROUP — Define en qué subredes puede vivir la BD
+# ============================================================
+resource "aws_db_subnet_group" "main" {
+  name       = "${var.project_name}-db-subnet-group"
+  subnet_ids = [aws_subnet.private_a.id, aws_subnet.private_b.id]
+
+  tags = {
+    Name        = "${var.project_name}-db-subnet-group"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
+}
+
+# ============================================================
+# RDS MYSQL — Base de datos gestionada
+# ============================================================
+resource "aws_db_instance" "main" {
+  identifier     = "${var.project_name}-db"
+  engine         = "mysql"
+  engine_version = "8.0"
+  instance_class = "db.t3.micro" # Elegible para Free Tier en AWS real
+
+  # Almacenamiento
+  allocated_storage     = 20   # GB (mínimo de Free Tier)
+  max_allocated_storage = 100  # Permite autoscaling de storage hasta 100 GB
+  storage_type          = "gp3"
+  storage_encrypted     = true # Cifrado en reposo — buena práctica de seguridad
+
+  # Credenciales (vienen de variables, no hardcodeadas)
+  db_name  = var.db_name
+  username = var.db_username
+  password = var.db_password
+
+  # Red — vive en las subredes privadas, con el SG de BD
+  db_subnet_group_name   = aws_db_subnet_group.main.name
+  vpc_security_group_ids = [aws_security_group.db.id]
+  publicly_accessible    = false # NUNCA accesible desde internet
+
+  # Backups y mantenimiento
+  backup_retention_period = 7           # Retener backups 7 días
+  skip_final_snapshot     = true        # Para dev; en prod sería false
+  deletion_protection     = false       # Para dev; en prod sería true
+
+  # Alta disponibilidad (lo dejamos en false para Floci/dev)
+  multi_az = false
+
+  tags = {
+    Name        = "${var.project_name}-db"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
+}
