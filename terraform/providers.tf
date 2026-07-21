@@ -14,7 +14,8 @@ terraform {
 provider "aws" {
   region     = var.aws_region
   access_key = "test"
-  secret_key = "test"
+  secret_key = "test"   # nosemgrep: aws-provider-static-credentials -- Credencial dummy para el emulador local Floci, no es un secreto real. En AWS real se usan variables de entorno / IAM roles.
+
 
   # Evita validar credenciales contra IAM real (que no existe en Floci)
   skip_credentials_validation = true

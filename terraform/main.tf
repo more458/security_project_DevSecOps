@@ -26,7 +26,8 @@ resource "aws_subnet" "public_a" {
   availability_zone = "${var.aws_region}a"
 
   # Las instancias que se lancen acá reciben IP pública automáticamente
-  map_public_ip_on_launch = true
+  map_public_ip_on_launch = true   # nosemgrep: aws-subnet-has-public-ip-address -- Subred publica intencional: aloja el ALB que debe ser accesible desde internet. Las cargas sensibles (app, BD) viven en subredes privadas.
+
 
   tags = {
     Name        = "${var.project_name}-public-a"
@@ -42,7 +43,8 @@ resource "aws_subnet" "public_b" {
   cidr_block        = "10.0.2.0/24"
   availability_zone = "${var.aws_region}b"
 
-  map_public_ip_on_launch = true
+  map_public_ip_on_launch = true   # nosemgrep: aws-subnet-has-public-ip-address -- Subred publica intencional: aloja el ALB que debe ser accesible desde internet. Las cargas sensibles (app, BD) viven en subredes privadas.
+
 
   tags = {
     Name        = "${var.project_name}-public-b"
@@ -324,6 +326,9 @@ resource "aws_db_instance" "main" {
 
   # Alta disponibilidad (lo dejamos en false para Floci/dev)
   multi_az = false
+
+  # Habilitar exportación de logs a CloudWatch (seguridad y auditoría)
+  enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
 
   tags = {
     Name        = "${var.project_name}-db"
