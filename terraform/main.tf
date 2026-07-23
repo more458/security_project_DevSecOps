@@ -339,3 +339,248 @@ resource "aws_db_instance" "main" {
     ManagedBy   = "Terraform"
   }
 }
+
+# ============================================================
+# ECR — Registro privado de imágenes Docker
+# ============================================================
+resource "aws_ecr_repository" "app" {
+  name                 = "${var.project_name}-app"
+  image_tag_mutability = "IMMUTABLE" # Las tags no se pueden sobrescribir (seguridad)
+
+  # Escanea la imagen en busca de vulnerabilidades al subirla
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  # Cifrado de las imágenes en reposo
+  encryption_configuration {
+    encryption_type = "AES256"
+  }
+
+  tags = {
+    Name        = "${var.project_name}-app"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
+}
+
+# ============================================================
+# IAM — Execution Role (lo usa ECS para arrancar el contenedor)
+# ============================================================
+
+# Documento de política que define QUIÉN puede asumir este rol
+data "aws_iam_policy_document" "ecs_assume_role" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["ecs-tasks.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "ecs_execution_role" {
+  name               = "${var.project_name}-ecs-execution-role"
+  assume_role_policy = data.aws_iam_policy_document.ecs_assume_role.json
+
+  tags = {
+    Name        = "${var.project_name}-ecs-execution-role"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
+}
+
+# Adjuntamos la política gestionada de AWS para execution role
+# (permite pull de ECR + escribir logs en CloudWatch)
+resource "aws_iam_role_policy_attachment" "ecs_execution_role_policy" {
+  role       = aws_iam_role.ecs_execution_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+# ============================================================
+# IAM — Task Role (lo usa tu app para hablar con servicios AWS)
+# ============================================================
+resource "aws_iam_role" "ecs_task_role" {
+  name               = "${var.project_name}-ecs-task-role"
+  assume_role_policy = data.aws_iam_policy_document.ecs_assume_role.json
+
+  tags = {
+    Name        = "${var.project_name}-ecs-task-role"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
+}
+
+# Por ahora el task role no tiene políticas adjuntas.
+# En el sub-bloque 2d le daremos permiso para leer el secreto
+# de la base de datos desde Secrets Manager (least-privilege).
+
+# ============================================================
+# ECS CLUSTER — El agrupamiento donde corren los contenedores
+# ============================================================
+resource "aws_ecs_cluster" "main" {
+  name = "${var.project_name}-cluster"
+
+  # Habilita Container Insights (monitoreo y métricas)
+  setting {
+    name  = "containerInsights"
+    value = "enabled"
+  }
+
+  tags = {
+    Name        = "${var.project_name}-cluster"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
+}
+
+# ============================================================
+# CLOUDWATCH LOGS — Destino centralizado de logs del contenedor
+# ============================================================
+resource "aws_cloudwatch_log_group" "app" {
+  name              = "/ecs/${var.project_name}-app"
+  retention_in_days = 30 # Retención explícita: ni infinita ni indefinida
+
+  tags = {
+    Name        = "${var.project_name}-app-logs"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
+}
+
+# ============================================================
+# ECS TASK DEFINITION — La "receta" de cómo correr el contenedor
+# ============================================================
+resource "aws_ecs_task_definition" "app" {
+  family                   = "${var.project_name}-app"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc" # Obligatorio en Fargate: IP propia por task
+  cpu                      = "256"    # 0.25 vCPU
+  memory                   = "512"    # 512 MB
+
+  execution_role_arn = aws_iam_role.ecs_execution_role.arn
+  task_role_arn      = aws_iam_role.ecs_task_role.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "${var.project_name}-app"
+      image     = "${aws_ecr_repository.app.repository_url}:latest"
+      essential = true
+
+      portMappings = [
+        {
+          containerPort = 8080
+          protocol      = "tcp"
+        }
+      ]
+
+      # Variables de configuración NO sensibles
+      environment = [
+        { name = "CI_ENVIRONMENT", value = var.environment },
+        { name = "database.default.hostname", value = split(":", aws_db_instance.main.endpoint)[0] },
+        { name = "database.default.port", value = "3306" },
+        { name = "database.default.DBDriver", value = "MySQLi" },
+        { name = "database.default.database", value = var.db_name },
+        { name = "database.default.username", value = var.db_username }
+      ]
+
+      # NOTA: la contraseña NO va acá. En el sub-bloque 2d la inyectamos
+      # desde AWS Secrets Manager usando el bloque `secrets`.
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.app.name
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+        }
+      }
+
+      # Seguridad: sistema de archivos raíz de solo lectura
+      readonlyRootFilesystem = false # CodeIgniter necesita escribir en writable/
+
+      # El contenedor ya corre como appuser (UID 1001) por el Dockerfile
+      user = "1001"
+    }
+  ])
+
+  tags = {
+    Name        = "${var.project_name}-app-task"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
+}
+
+# ============================================================
+# APPLICATION LOAD BALANCER — Punto de entrada público
+# ============================================================
+resource "aws_lb" "main" {
+  name               = "${var.project_name}-alb"
+  internal           = false # Público (mira a internet)
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = [aws_subnet.public_a.id, aws_subnet.public_b.id]
+
+  # Seguridad: elimina headers HTTP inválidos (mitiga request smuggling)
+  drop_invalid_header_fields = true
+
+  # Buena práctica: evita borrado accidental en producción
+  enable_deletion_protection = false # false para dev
+
+  tags = {
+    Name        = "${var.project_name}-alb"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
+}
+
+# ============================================================
+# TARGET GROUP — Grupo de destinos (los contenedores) + health check
+# ============================================================
+resource "aws_lb_target_group" "app" {
+  name        = "${var.project_name}-tg"
+  port        = 8080
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main.id
+  target_type = "ip" # Fargate usa IPs, no instancias EC2
+
+  # Health check: cómo el ALB sabe si el contenedor está sano
+  health_check {
+    enabled             = true
+    path                = "/"
+    protocol            = "HTTP"
+    matcher             = "200"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+  }
+
+  tags = {
+    Name        = "${var.project_name}-tg"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
+}
+
+# ============================================================
+# LISTENER — Escucha en el puerto 80 y enruta al target group
+# ============================================================
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app.arn
+  }
+}

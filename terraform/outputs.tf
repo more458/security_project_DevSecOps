@@ -42,3 +42,33 @@ output "db_name" {
   description = "Nombre de la base de datos"
   value       = aws_db_instance.main.db_name
 }
+
+output "ecr_repository_url" {
+  description = "URL del repositorio ECR"
+  value       = aws_ecr_repository.app.repository_url
+}
+
+output "ecs_cluster_name" {
+  description = "Nombre del cluster ECS"
+  value       = aws_ecs_cluster.main.name
+}
+
+output "task_definition_arn" {
+  description = "ARN de la task definition"
+  value       = aws_ecs_task_definition.app.arn
+}
+
+output "log_group_name" {
+  description = "Nombre del log group de CloudWatch"
+  value       = aws_cloudwatch_log_group.app.name
+}
+
+output "alb_dns_name" {
+  description = "DNS del balanceador (punto de entrada de la app)"
+  value       = aws_lb.main.dns_name
+}
+
+output "target_group_arn" {
+  description = "ARN del target group"
+  value       = aws_lb_target_group.app.arn
+}
