@@ -72,3 +72,13 @@ output "target_group_arn" {
   description = "ARN del target group"
   value       = aws_lb_target_group.app.arn
 }
+
+output "ecs_service_name" {
+  description = "Nombre del servicio ECS"
+  value       = aws_ecs_service.app.name
+}
+
+output "app_url" {
+  description = "URL de acceso a la aplicación (vía ALB)"
+  value       = "http://${aws_lb.main.dns_name}"
+}

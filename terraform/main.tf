@@ -465,9 +465,11 @@ resource "aws_kms_alias" "logs" {
 # ============================================================
 resource "aws_cloudwatch_log_group" "app" {
   name              = "/ecs/${var.project_name}-app"
-  retention_in_days = 30 # Retención explícita: ni infinita ni indefinida
-  kms_key_id        = aws_kms_key.logs.arn   
+  retention_in_days = 30
 
+  # Cifrado KMS condicional: se aplica en AWS real, se omite en Floci
+  # (Floci no soporta AssociateKmsKey). En prod se pasa use_kms_encryption=true.
+  kms_key_id = var.use_kms_encryption ? aws_kms_key.logs.arn : null
 
   tags = {
     Name        = "${var.project_name}-app-logs"
@@ -608,5 +610,40 @@ resource "aws_lb_listener" "http" {
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.app.arn
+  }
+}
+
+# ============================================================
+# ECS SERVICE — Mantiene el contenedor corriendo y lo conecta al ALB
+# ============================================================
+resource "aws_ecs_service" "app" {
+  name            = "${var.project_name}-service"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.app.arn
+  desired_count   = 2 # Dos contenedores para alta disponibilidad
+  launch_type     = "FARGATE"
+
+  # Configuración de red: dónde corren los contenedores
+  network_configuration {
+    subnets          = [aws_subnet.private_a.id, aws_subnet.private_b.id]
+    security_groups  = [aws_security_group.app.id]
+    assign_public_ip = false # Sin IP pública — viven en subredes privadas
+  }
+
+  # Conexión con el ALB: registra los contenedores en el target group
+  load_balancer {
+    target_group_arn = aws_lb_target_group.app.arn
+    container_name   = "${var.project_name}-app"
+    container_port   = 8080
+  }
+
+  # Espera a que el listener del ALB exista antes de crear el service
+  depends_on = [aws_lb_listener.http]
+
+  tags = {
+    Name        = "${var.project_name}-service"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
   }
 }
