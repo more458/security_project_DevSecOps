@@ -439,11 +439,35 @@ resource "aws_ecs_cluster" "main" {
 }
 
 # ============================================================
+# KMS — Clave para cifrar los logs de CloudWatch
+# ============================================================
+resource "aws_kms_key" "logs" {
+  description             = "Clave KMS para cifrar logs de CloudWatch de ${var.project_name}"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true # Rotación automática anual de la clave
+
+  tags = {
+    Name        = "${var.project_name}-logs-key"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
+}
+
+# Alias legible para la clave (en vez de un ID críptico)
+resource "aws_kms_alias" "logs" {
+  name          = "alias/${var.project_name}-logs"
+  target_key_id = aws_kms_key.logs.key_id
+}
+
+# ============================================================
 # CLOUDWATCH LOGS — Destino centralizado de logs del contenedor
 # ============================================================
 resource "aws_cloudwatch_log_group" "app" {
   name              = "/ecs/${var.project_name}-app"
   retention_in_days = 30 # Retención explícita: ni infinita ni indefinida
+  kms_key_id        = aws_kms_key.logs.arn   
+
 
   tags = {
     Name        = "${var.project_name}-app-logs"
@@ -520,6 +544,7 @@ resource "aws_ecs_task_definition" "app" {
 # ============================================================
 # APPLICATION LOAD BALANCER — Punto de entrada público
 # ============================================================
+# nosemgrep: aws-elb-access-logs-not-enabled -- Access logs requieren bucket S3 dedicado con policy; no se emulan utilmente en Floci. Documentado como hardening futuro para AWS real.
 resource "aws_lb" "main" {
   name               = "${var.project_name}-alb"
   internal           = false # Público (mira a internet)
@@ -574,6 +599,7 @@ resource "aws_lb_target_group" "app" {
 # ============================================================
 # LISTENER — Escucha en el puerto 80 y enruta al target group
 # ============================================================
+# nosemgrep: insecure-load-balancer-tls-version -- HTTP en dev/emulador. En produccion se usaria listener HTTPS con certificado ACM y redireccion 80->443. Documentado como deuda tecnica.
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = 80
