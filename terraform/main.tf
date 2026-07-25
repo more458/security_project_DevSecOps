@@ -599,11 +599,11 @@ resource "aws_lb_target_group" "app" {
 # ============================================================
 # LISTENER — Escucha en el puerto 80 y enruta al target group
 # ============================================================
-# nosemgrep: insecure-load-balancer-tls-version -- HTTP en dev/emulador. En produccion se usaria listener HTTPS con certificado ACM y redireccion 80->443. Documentado como deuda tecnica.
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = 80
-  protocol          = "HTTP"
+  protocol          = "HTTP" # nosemgrep: insecure-load-balancer-tls-version -- HTTP en dev/emulador. En produccion se usaria listener HTTPS con certificado ACM y redireccion 80->443. Documentado como deuda tecnica.
+
 
   default_action {
     type             = "forward"
