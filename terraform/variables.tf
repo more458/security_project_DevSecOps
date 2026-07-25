@@ -33,3 +33,9 @@ variable "db_password" {
   type        = string
   sensitive   = true
 }
+
+variable "use_kms_encryption" {
+  description = "Habilita cifrado KMS en logs. Falso para Floci (no lo soporta), true para AWS real."
+  type        = bool
+  default     = false
+}
