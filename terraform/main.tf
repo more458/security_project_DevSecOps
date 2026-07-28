@@ -515,8 +515,13 @@ resource "aws_ecs_task_definition" "app" {
         { name = "database.default.username", value = var.db_username }
       ]
 
-      # NOTA: la contraseña NO va acá. En el sub-bloque 2d la inyectamos
-      # desde AWS Secrets Manager usando el bloque `secrets`.
+      # Secretos inyectados desde Secrets Manager en runtime
+      secrets = [
+        {
+          name      = "database.default.password"
+          valueFrom = aws_secretsmanager_secret.db_password.arn
+        }
+      ]
 
       logConfiguration = {
         logDriver = "awslogs"
@@ -646,4 +651,55 @@ resource "aws_ecs_service" "app" {
     Environment = var.environment
     ManagedBy   = "Terraform"
   }
+}
+
+# ============================================================
+# SECRETS MANAGER — Almacén cifrado de la contraseña de la BD
+# ============================================================
+resource "aws_secretsmanager_secret" "db_password" {
+  name        = "${var.project_name}/db-password"
+  description = "Contraseña de la base de datos MySQL de ${var.project_name}"
+
+  # Días antes de borrado definitivo tras marcar para eliminación
+  recovery_window_in_days = 7
+
+  tags = {
+    Name        = "${var.project_name}-db-password"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
+}
+
+# La versión del secreto (el valor real)
+resource "aws_secretsmanager_secret_version" "db_password" {
+  secret_id     = aws_secretsmanager_secret.db_password.id
+  secret_string = var.db_password
+}
+
+# ============================================================
+# IAM — Permiso para que la task lea SOLO su secreto
+# ============================================================
+data "aws_iam_policy_document" "read_db_secret" {
+  statement {
+    effect  = "Allow"
+    actions = ["secretsmanager:GetSecretValue"]
+    # Least-privilege: SOLO este secreto específico, no todos
+    resources = [aws_secretsmanager_secret.db_password.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "task_read_secret" {
+  name   = "${var.project_name}-read-db-secret"
+  role   = aws_iam_role.ecs_task_role.id
+  policy = data.aws_iam_policy_document.read_db_secret.json
+}
+
+# ============================================================
+# IAM — Permiso para que el EXECUTION role inyecte el secreto
+# ============================================================
+resource "aws_iam_role_policy" "execution_read_secret" {
+  name   = "${var.project_name}-execution-read-secret"
+  role   = aws_iam_role.ecs_execution_role.id
+  policy = data.aws_iam_policy_document.read_db_secret.json
 }

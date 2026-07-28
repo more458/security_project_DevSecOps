@@ -82,3 +82,8 @@ output "app_url" {
   description = "URL de acceso a la aplicación (vía ALB)"
   value       = "http://${aws_lb.main.dns_name}"
 }
+
+output "db_secret_arn" {
+  description = "ARN del secreto de la contraseña en Secrets Manager"
+  value       = aws_secretsmanager_secret.db_password.arn
+}
