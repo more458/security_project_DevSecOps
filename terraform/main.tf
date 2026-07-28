@@ -660,8 +660,11 @@ resource "aws_secretsmanager_secret" "db_password" {
   name        = "${var.project_name}/db-password"
   description = "Contraseña de la base de datos MySQL de ${var.project_name}"
 
-  # Días antes de borrado definitivo tras marcar para eliminación
   recovery_window_in_days = 7
+
+  # Cifrado KMS condicional: se aplica en AWS real, se omite en Floci
+  # (mismo patrón que el log group). En prod se pasa use_kms_encryption=true.
+  kms_key_id = var.use_kms_encryption ? aws_kms_key.logs.arn : null
 
   tags = {
     Name        = "${var.project_name}-db-password"
