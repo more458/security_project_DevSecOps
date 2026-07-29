@@ -2,22 +2,23 @@
 
 > **🌐 Idiomas:** **Español** · [English](README.en.md)
 
-Pipeline DevSecOps de extremo a extremo aplicado sobre una aplicación PHP + CodeIgniter 4 containerizada, con cinco capas de análisis de seguridad automatizadas en GitHub Actions.
+Pipeline DevSecOps de extremo a extremo aplicado sobre una aplicación PHP + CodeIgniter 4 containerizada, con cinco capas de análisis de seguridad automatizadas en GitHub Actions e infraestructura cloud definida como código con Terraform.
 
 ![Pipeline](https://img.shields.io/badge/pipeline-passing-brightgreen)
 ![PHP](https://img.shields.io/badge/PHP-8.1-777BB4?logo=php&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-multi--stage-2496ED?logo=docker&logoColor=white)
+![Terraform](https://img.shields.io/badge/Terraform-IaC-7B42BC?logo=terraform&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 ---
 
 ## 🎯 Sobre el proyecto
 
-Este repositorio documenta la implementación de un **pipeline DevSecOps completo** sobre una aplicación web previamente existente (SweetVibes, un e-commerce de dulces desarrollado en CodeIgniter 4). El foco del proyecto **no es el e-commerce en sí**, sino la construcción, iteración y endurecimiento del pipeline de seguridad que lo protege.
+Este repositorio documenta la implementación de un **pipeline DevSecOps completo** y una **infraestructura cloud segura** sobre una aplicación web previamente existente (SweetVibes, un e-commerce de dulces desarrollado en CodeIgniter 4). El foco del proyecto **no es el e-commerce en sí**, sino la construcción, iteración y endurecimiento del pipeline de seguridad y la infraestructura que lo despliega.
 
-El objetivo fue diseñar una experiencia práctica de shift-left security aplicando principios reales de la disciplina: análisis estático de código, escaneo de dependencias, detección de secretos, hardening de contenedores y análisis de infraestructura como código, todo integrado en un flujo de CI/CD reproducible.
+El objetivo fue diseñar una experiencia práctica de shift-left security aplicando principios reales de la disciplina: análisis estático de código, escaneo de dependencias, detección de secretos, hardening de contenedores, análisis de infraestructura como código, y despliegue seguro en la nube con gestión de secretos, todo integrado en un flujo de CI/CD reproducible.
 
-**Motivación:** aprender DevSecOps de manera aplicada usando un proyecto real como campo de pruebas, en lugar de ejercicios aislados. El e-commerce sirvió únicamente como base sobre la cual construir un pipeline defensivo profesional.
+**Motivación:** aprender DevSecOps de manera aplicada usando un proyecto real como campo de pruebas, en lugar de ejercicios aislados. El e-commerce sirvió únicamente como base sobre la cual construir un pipeline defensivo profesional y su infraestructura cloud.
 
 ---
 
@@ -41,7 +42,60 @@ flowchart LR
     style G fill:#99ff99
 ```
 
-El pipeline aplica el principio de **shift-left security**: los análisis más rápidos y baratos corren primero, y los más costosos (build + scan de imagen) al final. Los análisis estáticos (SAST + IaC) corren en paralelo para optimizar tiempo total del pipeline.
+El pipeline aplica el principio de **shift-left security**: los análisis más rápidos y baratos corren primero, y los más costosos (build + scan de imagen) al final. Los análisis estáticos (SAST + IaC) corren en paralelo para optimizar tiempo total del pipeline. Checkov cubre tanto el Dockerfile y los workflows como el código Terraform de la infraestructura.
+
+---
+
+## ☁️ Arquitectura de infraestructura (Cloud)
+
+La infraestructura AWS está definida completamente como código con Terraform y validada localmente contra [Floci](https://floci.io/) (emulador de AWS de código abierto, reemplazo de LocalStack tras el cambio de licencia de su edición Community en marzo de 2026). El diseño sigue el patrón estándar de la industria: separación de capas público/privada, encadenamiento de security groups con least-privilege, y gestión de secretos en runtime.
+
+```mermaid
+flowchart TB
+    Internet([Internet]) --> IGW[Internet Gateway]
+
+    subgraph VPC["VPC 10.0.0.0/16"]
+        IGW --> ALB
+
+        subgraph Public["Subredes Públicas · 2 AZs"]
+            ALB[Application Load Balancer<br/>SG: 80/443 desde Internet]
+        end
+
+        subgraph Private["Subredes Privadas · 2 AZs"]
+            ECS[ECS Fargate<br/>SG: 8080 solo desde ALB]
+            RDS[(RDS MySQL 8.0<br/>SG: 3306 solo desde App<br/>Cifrada · Backups · Logs)]
+        end
+
+        ALB -->|8080| ECS
+        ECS -->|3306| RDS
+    end
+
+    ECS -.->|lee secreto en runtime| SM[Secrets Manager<br/>Contraseña BD cifrada]
+    ECS -.->|pull imagen| ECR[ECR<br/>Tags inmutables · Scan on push]
+    ECS -.->|logs| CW[CloudWatch Logs<br/>Retención 30d · KMS]
+
+    style ALB fill:#ffcc99
+    style ECS fill:#99ccff
+    style RDS fill:#ff9999
+    style SM fill:#cc99ff
+    style ECR fill:#99ffcc
+    style CW fill:#ffff99
+```
+
+### Componentes de la infraestructura
+
+| Componente | Descripción | Controles de seguridad |
+|------------|-------------|------------------------|
+| **VPC + Subredes** | Red aislada `10.0.0.0/16` con 4 subredes (2 públicas + 2 privadas) en 2 Availability Zones | Aislamiento público/privado, alta disponibilidad multi-AZ |
+| **Internet Gateway + Routing** | Salida a internet solo para subredes públicas | Subredes privadas sin ruta a internet (aisladas) |
+| **Security Groups** | 3 SGs encadenados: ALB → App → BD | Least-privilege; la BD solo acepta a la App, la App solo al ALB |
+| **RDS MySQL 8.0** | Base de datos gestionada en subredes privadas | Cifrado en reposo, backups 7 días, logs a CloudWatch, sin acceso público |
+| **ECR** | Registro privado de imágenes Docker | Tags inmutables, scan on push, cifrado AES256 |
+| **ECS Fargate** | Orquestación serverless de contenedores | Corre en subredes privadas, contenedor no-root, `desired_count=2` |
+| **ALB** | Balanceador público, punto de entrada | `drop_invalid_header_fields`, health checks |
+| **IAM Roles** | Execution role + Task role separados | Least-privilege; permiso de lectura solo sobre el secreto específico |
+| **Secrets Manager** | Contraseña de la BD cifrada | Inyección en runtime vía ARN, nunca en texto plano en el código |
+| **CloudWatch Logs + KMS** | Logs centralizados cifrados | Retención de 30 días, cifrado KMS condicional por entorno |
 
 ---
 
@@ -50,8 +104,8 @@ El pipeline aplica el principio de **shift-left security**: los análisis más r
 | Capa | Herramienta | Qué escanea | Resultado |
 |------|-------------|-------------|-----------|
 | **Secretos** | [Gitleaks](https://github.com/gitleaks/gitleaks) | Historial completo de Git en busca de credenciales, tokens y claves API expuestas | ✅ Sin findings activos |
-| **SAST** | [Semgrep](https://semgrep.dev/) | Código PHP en busca de patrones vulnerables (SQL injection, XSS, uso inseguro de APIs) | ✅ 0 findings tras exclusión del core de CI4 |
-| **IaC** | [Checkov](https://www.checkov.io/) | Dockerfile, workflows de GitHub Actions y detección de secretos en config | ✅ **203 checks pasados, 0 findings** |
+| **SAST** | [Semgrep](https://semgrep.dev/) | Código PHP y Terraform en busca de patrones vulnerables | ✅ 0 findings tras triage y exclusión del core de CI4 |
+| **IaC** | [Checkov](https://www.checkov.io/) | Dockerfile, workflows de GitHub Actions, secretos y **Terraform** | ✅ **49 checks pasados, 0 findings, 21 suprimidos con justificación** |
 | **SCA** | [local-php-security-checker](https://github.com/fabpot/local-php-security-checker) | `composer.lock` filtrado para incluir solo dependencias de producción | ⚠️ 1 CVE conocido en PHPUnit (dev-only, aceptado) |
 | **Container** | [Trivy](https://github.com/aquasecurity/trivy) | Imagen Docker construida (SO, librerías del sistema y dependencias PHP) | ✅ Sin vulnerabilidades críticas |
 
@@ -71,16 +125,17 @@ El pipeline aplica el principio de **shift-left security**: los análisis más r
 - Nginx (como reverse proxy dentro del contenedor)
 - PHP-FPM
 
+**Cloud e Infraestructura como Código**
+- Terraform (definición declarativa de toda la infraestructura AWS)
+- Floci (emulador local de AWS, reemplazo de LocalStack)
+- AWS CLI
+- Servicios AWS: VPC, RDS, ECR, ECS Fargate, ALB, IAM, Secrets Manager, CloudWatch, KMS
+
 **CI/CD y seguridad**
 - GitHub Actions
 - SARIF reporting integrado con GitHub Security tab
 - Todas las actions pineadas a commit SHA (mitigación de supply-chain attacks)
 - Ejecución paralela de análisis estáticos
-
-**Cloud (fase futura)**
-- Terraform + LocalStack (para desarrollo local)
-- AWS Free Tier (para demo final)
-- AWS Secrets Manager (para gestión de credenciales)
 
 ---
 
@@ -95,7 +150,13 @@ security_project_DevSecOps/
 ├── public/                         # Assets estáticos y entry point
 ├── system/                         # Core de CodeIgniter 4 (excluido de escaneos)
 ├── writable/                       # Cache, logs y sesiones (excluido de escaneos)
-├── .checkov.yaml                   # Configuración de Checkov
+├── terraform/                      # Infraestructura como código
+│   ├── providers.tf                # Provider AWS apuntando a Floci
+│   ├── variables.tf                # Variables parametrizables
+│   ├── main.tf                     # Recursos (VPC, RDS, ECS, ALB, Secrets, etc.)
+│   ├── outputs.tf                  # Valores expuestos tras el despliegue
+│   └── .gitignore                  # Ignora tfstate y .terraform/
+├── .checkov.yaml                   # Configuración de Checkov + supresiones justificadas
 ├── .dockerignore                   # Exclusiones para el build de Docker
 ├── .env.example                    # Template de configuración (sin secretos)
 ├── .gitignore                      # Ignora .env, vendor/, node_modules/, etc.
@@ -114,8 +175,10 @@ security_project_DevSecOps/
 
 - Docker Desktop 20+
 - Git
+- Terraform CLI (para la fase de infraestructura)
+- AWS CLI (para interactuar con Floci)
 
-### Instalación
+### Instalación de la aplicación
 
 ```bash
 # 1. Clonar el repositorio
@@ -137,15 +200,23 @@ docker compose up -d --build
 # Abrir http://localhost:8080 en el navegador
 ```
 
-### Variables de entorno requeridas
+### Despliegue de la infraestructura (Floci)
 
-| Variable | Descripción | Ejemplo |
-|----------|-------------|---------|
-| `MYSQL_ROOT_PASSWORD` | Contraseña del usuario root de MySQL (uso administrativo interno) | contraseña fuerte, ≥16 caracteres |
-| `MYSQL_DATABASE` | Nombre de la base de datos | `mi_ecomerce` |
-| `MYSQL_USER` | Usuario de aplicación (**no root**) | `ecommerce_app` |
-| `MYSQL_PASSWORD` | Contraseña del usuario de aplicación | contraseña fuerte, distinta de root |
-| `APP_ENCRYPTION_KEY` | Clave de encriptación para sesiones y cookies firmadas | Generar con `php spark key:generate` |
+```bash
+# 1. Levantar el emulador de AWS
+docker compose up -d floci
+
+# 2. Configurar credenciales dummy para la AWS CLI
+export AWS_ACCESS_KEY_ID=test
+export AWS_SECRET_ACCESS_KEY=test
+export AWS_DEFAULT_REGION=us-east-1
+export AWS_ENDPOINT_URL=http://localhost:4566
+
+# 3. Inicializar y aplicar Terraform
+cd terraform
+terraform init
+terraform apply   # Requiere db_password vía terraform.tfvars (no versionado)
+```
 
 ---
 
@@ -159,13 +230,13 @@ Escanea todo el historial de Git (`fetch-depth: 0`) en busca de secretos filtrad
 
 ### Job 2 — Static Application Security Testing (Semgrep)
 
-Análisis estático del código PHP con reglas de la comunidad. Se excluye el directorio `system/` (core de CI4) para evitar ruido de falsos positivos en código no controlado por el proyecto. Corre en paralelo con Checkov.
+Análisis estático del código PHP y Terraform con reglas de la comunidad. Se excluye el directorio `system/` (core de CI4) para evitar ruido de falsos positivos en código no controlado por el proyecto. Corre en paralelo con Checkov.
 
 ### Job 3 — Infrastructure as Code Scan (Checkov)
 
-Escanea el Dockerfile y los workflows de GitHub Actions contra ~200 checks de seguridad de infraestructura. Sube los resultados en formato SARIF a la pestaña **Security** de GitHub para tracking histórico. Corre en paralelo con Semgrep.
+Escanea el Dockerfile, los workflows de GitHub Actions y el **código Terraform** contra los checks de seguridad de infraestructura de Checkov. Sube los resultados en formato SARIF a la pestaña **Security** de GitHub para tracking histórico. Corre en paralelo con Semgrep.
 
-**Resultado actual:** 203 checks pasados, 0 findings. Este resultado es consecuencia directa del hardening aplicado en el Dockerfile y en la configuración del pipeline.
+**Resultado en Terraform:** 49 checks pasados, 0 fallados, 21 suprimidos con justificación documentada. El proceso de triage —arreglar los findings con valor real y documentar por qué se aceptan los demás— es el núcleo del trabajo DevSecOps.
 
 ### Job 4 — Software Composition Analysis (PHP Security Checker)
 
@@ -184,70 +255,78 @@ Construye la imagen de Docker localmente y la escanea con Trivy en busca de:
 - CVEs en librerías compiladas
 - CVEs en dependencias PHP finales
 
-**Nota de decisión:** Trivy se instala mediante descarga directa del binario con verificación de checksum SHA-256, en lugar de usar la action oficial `aquasecurity/trivy-action`. Esto responde a incompatibilidades detectadas entre la action y los runners con Node 24 al momento de construir el pipeline. La instalación manual es más robusta y más transparente:
-
-```bash
-curl -sSL -o trivy.tar.gz "https://github.com/aquasecurity/trivy/releases/..."
-sha256sum -c trivy_checksums.txt
-tar -xzf trivy.tar.gz
-```
+**Nota de decisión:** Trivy se instala mediante descarga directa del binario con verificación de checksum SHA-256, en lugar de usar la action oficial `aquasecurity/trivy-action`. Esto responde a incompatibilidades detectadas entre la action y los runners con Node 24 al momento de construir el pipeline. La instalación manual es más robusta y más transparente.
 
 ---
 
 ## 🔒 Hardening realizado
 
-El proyecto pasó por un proceso iterativo de endurecimiento documentado a través del historial de commits. Los cambios principales:
+El proyecto pasó por un proceso iterativo de endurecimiento documentado a través del historial de commits.
 
 ### Contenedor
 
-- **Multi-stage build:** separación en etapas de `composer` (gestión de dependencias), `builder` (compilación de extensiones PHP) y producción final. La imagen resultante no contiene Composer, ni herramientas de desarrollo, ni `.env`, ni tests.
-- **Usuario no-root:** el contenedor corre como `appuser` (UID 1001), no como root. Nginx escucha en puerto 8080 (compatible con usuarios sin privilegios).
-- **Healthcheck integrado:** el contenedor reporta su estado, permitiendo orquestadores (Docker Compose, ECS, K8s) reiniciarlo si degrada.
-- **`.dockerignore` estricto:** excluye `.env`, `.git/`, `node_modules/`, tests, documentación y caché de CI4. Ninguno de estos archivos viaja a la imagen final.
-- **`apk upgrade --no-cache`:** parcheo automático de vulnerabilidades del sistema operativo en cada build.
+- **Multi-stage build:** etapas de `composer`, `builder` y producción final. La imagen resultante no contiene Composer, ni herramientas de desarrollo, ni `.env`, ni tests.
+- **Usuario no-root:** el contenedor corre como `appuser` (UID 1001). Nginx escucha en puerto 8080 (compatible con usuarios sin privilegios).
+- **Healthcheck integrado** y **`.dockerignore` estricto** que excluye secretos y basura de dev.
+- **`apk upgrade --no-cache`:** parcheo automático de vulnerabilidades del SO en cada build.
 
 ### Aplicación
 
-- **Cero credenciales en código:** todas las credenciales de base de datos y claves de encriptación se leen exclusivamente desde variables de entorno.
-- **`.env` fuera del control de versiones:** validado tanto en el `.gitignore` como en el `.dockerignore`.
-- **`baseURL` dinámica:** eliminación del path hardcodeado en `app/Config/App.php` (`http://localhost/proyecto_ecomerce`), reemplazado por lectura de `app.baseURL` desde el entorno.
-- **Defaults defensivos en `Database.php`:** los valores fallback se dejaron vacíos, forzando fallo temprano si las variables de entorno no cargan (evita conexiones silenciosas a `root@localhost` sin contraseña).
+- **Cero credenciales en código:** todas las credenciales se leen desde variables de entorno.
+- **`.env` fuera del control de versiones** (validado en `.gitignore` y `.dockerignore`).
+- **`baseURL` dinámica** y **defaults defensivos en `Database.php`** (fallos tempranos en vez de conexiones inseguras).
 
 ### Base de datos
 
-- **Usuario de aplicación no-root:** MySQL corre con `MYSQL_USER=ecommerce_app` con permisos limitados a la base de datos del proyecto. El usuario `root` de MySQL se reserva únicamente para tareas administrativas internas del contenedor.
-- **Contraseñas rotadas:** todas las credenciales presentes en el historial temprano de Git fueron rotadas antes de hacer el repositorio público.
-- **Healthcheck integrado:** la app espera a que MySQL esté listo antes de intentar conectarse (`depends_on: condition: service_healthy`).
+- **Usuario de aplicación no-root** (`ecommerce_app`) con permisos limitados a la BD del proyecto.
+- **Contraseñas rotadas** antes de hacer público el repositorio.
+- **Healthcheck** que hace esperar a la app hasta que MySQL esté listo.
+
+### Infraestructura (Cloud)
+
+- **Encadenamiento de security groups (least-privilege):** el ALB acepta internet, la App solo acepta al ALB, la BD solo acepta a la App. Ningún servicio interno queda expuesto a internet.
+- **Base de datos en subred privada:** sin ruta a internet, cifrada en reposo, con backups automáticos y logs a CloudWatch.
+- **Gestión de secretos en runtime:** la contraseña de la BD vive cifrada en Secrets Manager y se inyecta al contenedor al arrancar, referenciada por ARN. Nunca aparece en el código ni en la task definition.
+- **IAM con least-privilege:** roles separados de execution y task; permiso de lectura acotado exclusivamente al secreto necesario.
+- **ECR endurecido:** tags inmutables (evita sobrescritura maliciosa), scan on push y cifrado en reposo.
+- **Cifrado KMS de logs y secretos** con rotación automática de claves (activable por entorno).
 
 ### Pipeline
 
-- **Actions pineadas a SHA:** todas las actions de GitHub referenciadas por commit hash en lugar de tag semántico, mitigando ataques de supply chain donde un atacante retagea una versión maliciosa.
-- **Permisos mínimos:** cada job declara solo los permisos que necesita (`contents: read`, `security-events: write` únicamente donde se sube SARIF).
-- **SARIF upload:** los findings de Checkov se publican en la pestaña Security del repositorio para tracking y triage.
+- **Actions pineadas a SHA** (mitigación de supply chain).
+- **Permisos mínimos** por job.
+- **SARIF upload** a la pestaña Security del repositorio.
 
 ---
 
 ## 🧠 Decisiones técnicas destacables
 
-### Uso de `jq` para filtrar `composer.lock`
+### Encadenamiento de security groups por identidad, no por IP
 
-`composer install --no-dev` instala solo dependencias de producción, pero **no modifica el `composer.lock`**. Sin filtrado adicional, el escaneo de SCA reportaría CVEs de librerías (como PHPUnit) que nunca llegan al contenedor. El uso de `jq` para eliminar `packages-dev` antes del scan produce un reporte alineado con lo que realmente se despliega.
+En lugar de restringir el acceso a la BD por rango de IPs, las reglas de security group referencian **otros security groups** (`source_security_group_id`). La BD solo acepta tráfico de recursos que tengan el SG de la aplicación. Esto es más seguro (no depende de IPs cambiantes) y autodocumentado: la regla expresa directamente "solo la app habla con la BD".
 
-### Ejecución paralela de SAST + IaC
+### Cifrado KMS condicional por entorno
 
-Semgrep y Checkov son análisis independientes que no comparten dependencias entre sí. En lugar de encadenarlos secuencialmente, el pipeline los ejecuta en paralelo, reduciendo el tiempo total. El SCA se declara con `needs: [sast-scan, iac-scan]` para esperar a ambos.
+El cifrado con claves KMS propias, requerido para pasar el análisis estático, no es soportado por el emulador local (Floci no implementa `AssociateKmsKey`). Se resolvió con una variable condicional (`use_kms_encryption`) que activa KMS en AWS real y lo omite en el entorno de emulación, manteniendo el código seguro por diseño sin romper el flujo de desarrollo local.
 
-### Trivy instalado manualmente
+### Gestión de secretos alineada desde el diseño
 
-La action `aquasecurity/trivy-action` presentó incompatibilidades con los runners actualizados a Node 24 durante la construcción del pipeline. La instalación manual del binario con verificación de checksum es:
+Desde la primera fase, la aplicación se diseñó para leer todas sus credenciales de variables de entorno. Esto permitió, al final, inyectar la contraseña desde Secrets Manager en runtime **sin modificar una sola línea del código de la aplicación**. Cada fase preparó la siguiente.
 
-- Más reproducible: la versión queda fija y explícita.
-- Más transparente: no hay abstracción intermedia.
-- Más resiliente: no depende de cambios de comportamiento en una action externa.
+### Triage de findings de IaC
 
-### Checkov como escaneo unificado
+Checkov detectó 26 findings en el Terraform. Se arreglaron los que aportaban valor real con esfuerzo razonable (auto minor upgrades, Multi-AZ condicional, copy tags to snapshot, cierre del security group default) y se suprimieron el resto de forma **centralizada y documentada** en `.checkov.yaml`, clasificando cada uno por su razón: deuda técnica consciente de desarrollo, limitación del emulador, o infraestructura externa fuera del alcance.
 
-Se eligió Checkov sobre tfsec porque cubre múltiples frameworks (Dockerfile, workflows, secretos, y en el futuro Terraform) con una sola herramienta, simplificando el mantenimiento del pipeline. Además, tfsec fue absorbido por Trivy en 2023, por lo que su uso independiente perdió sentido.
+---
+
+## 📚 Lecciones aprendidas (trabajo con emuladores de AWS)
+
+El desarrollo contra un emulador local reveló diferencias reales entre el entorno de desarrollo y AWS de producción — un aprendizaje central para trabajar con IaC:
+
+- **Los emuladores no garantizan persistencia entre reinicios.** Al reiniciar Floci, la infraestructura debía recrearse. Esto refuerza el valor de la Infraestructura como Código: toda la infra se reconstruye desde cero con un solo comando.
+- **Las reglas de security group con referencia cruzada** (como recursos separados) fallaban en el emulador; se resolvieron definiéndolas inline. El código original era correcto para AWS real — la diferencia era de fidelidad del emulador.
+- **Algunos atributos son inmutables** (como el cifrado de ECR): cambiarlos requiere recrear el recurso, lo que el emulador no siempre soporta.
+- **Un `apply` exitoso contra un emulador no garantiza el mismo resultado contra AWS real**, ni viceversa. La validación final requiere probar contra la nube real (planificado con AWS Free Tier).
 
 ---
 
@@ -256,32 +335,34 @@ Se eligió Checkov sobre tfsec porque cubre múltiples frameworks (Dockerfile, w
 Estas decisiones se documentan explícitamente en lugar de ocultarse:
 
 - **PHP 8.1 está EOL.** El upgrade a 8.2+ está pendiente. Se mantuvo por estabilidad de la app original.
-- **CVE-2026-24765 en PHPUnit.** Se acepta el finding porque PHPUnit es una dependencia dev-only y no llega al contenedor de producción. Documentado en `.semgrepignore` y en el filtro de SCA.
-- **`read_only: true` en MySQL fue removido.** Genera conflictos con la escritura de MySQL en directorios no cubiertos por `tmpfs`. Se prioriza estabilidad; en producción se sustituye por controles de nivel de red y de IAM.
-- **Historial de Git contiene credenciales antiguas.** La contraseña `secreto123` aparece en commits tempranos. Fue rotada antes de hacer público el repositorio, pero se decidió no reescribir el historial (`git filter-repo`) para preservar la trazabilidad del proceso de aprendizaje. Documentar el incidente es más honesto que ocultarlo.
+- **CVE en PHPUnit.** Se acepta el finding porque PHPUnit es una dependencia dev-only y no llega al contenedor de producción.
+- **`read_only: true` en MySQL fue removido** por conflictos con la escritura del motor; se sustituye por controles de red e IAM.
+- **Historial de Git contiene credenciales antiguas** (`secreto123`). Fueron rotadas antes de hacer público el repositorio; se decidió no reescribir el historial para preservar la trazabilidad del proceso de aprendizaje.
+- **Findings de IaC suprimidos con justificación:** HTTPS/TLS (requiere certificado y dominio real), access logs del ALB y flow logs de VPC (requieren buckets/log groups dedicados), deletion protection (deshabilitada para permitir `terraform destroy` en dev). Todos documentados en `.checkov.yaml`, activables en producción.
 
 ---
 
 ## 🚀 Roadmap
 
-**Fase completada** ✅
+**Fases completadas** ✅
 - Pipeline DevSecOps con 5 capas de análisis
 - Hardening de contenedor y aplicación
 - Rotación de credenciales
 - SARIF reporting integrado
-
-**Fase en curso** 🚧
-- **Infraestructura como código con Terraform**
-- **LocalStack** para desarrollo local sin costo
-- **AWS Free Tier** para demo final
-- **AWS Secrets Manager** para gestión de credenciales en producción
-- Ampliación de Checkov para cubrir archivos `.tf`
+- **Infraestructura como código completa con Terraform** (VPC, RDS, ECS Fargate, ALB, IAM, Secrets Manager)
+- **Gestión de secretos en runtime con AWS Secrets Manager**
+- **Escaneo de IaC (Terraform) integrado al pipeline con Checkov**
 
 **Futuro cercano** 📋
+- Validación de la infraestructura contra AWS Free Tier real (para verificar IAM policies y features no emuladas)
 - Upgrade de PHP a 8.2+
 - Re-activación de Dependabot con configuración ajustada
 - Firmado de imágenes con Cosign
 - SBOM (Software Bill of Materials) generado en cada release
+- Endurecimiento de producción: HTTPS con certificado ACM, WAF, VPC flow logs, egress restringido
+
+**Proyecto futuro relacionado** 🔭
+- Un proyecto dedicado a Kubernetes (hardening de cluster, network policies, admission controllers), planificado como continuación temática con foco distinto.
 
 ---
 
@@ -289,13 +370,13 @@ Estas decisiones se documentan explícitamente en lugar de ocultarse:
 
 ### Pipeline en ejecución exitosa
 
-Los cinco jobs corriendo en paralelo donde corresponde, con tiempo total de **2m 15s**:
+Los cinco jobs corriendo en paralelo donde corresponde:
 
 ![Pipeline exitoso](docs/images/pipeline-success.png)
 
 ### Resultados de Checkov
 
-El escaneo de IaC completo sin findings: **111 checks pasados en el Dockerfile, 0 fallados**.
+El escaneo de IaC completo sin findings:
 
 ![Resultados de Checkov](docs/images/checkov-results.png)
 
@@ -318,4 +399,4 @@ Este proyecto se distribuye bajo la licencia MIT. Ver [LICENSE](LICENSE) para m�
 ## 🙏 Reconocimientos
 
 - La aplicación base (SweetVibes e-commerce) fue originalmente desarrollada para un contexto académico previo.
-- El presente proyecto DevSecOps se construyó sobre esa base con fines de aprendizaje autodirigido en el área de seguridad de aplicaciones y automatización de CI/CD.
+- El presente proyecto DevSecOps se construyó sobre esa base con fines de aprendizaje autodirigido en el área de seguridad de aplicaciones, automatización de CI/CD e infraestructura cloud.
