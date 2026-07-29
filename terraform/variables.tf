@@ -39,3 +39,9 @@ variable "use_kms_encryption" {
   type        = bool
   default     = false
 }
+
+variable "enable_high_availability" {
+  description = "Habilita features de HA (Multi-AZ). Falso en Floci, true en AWS real."
+  type        = bool
+  default     = false
+}

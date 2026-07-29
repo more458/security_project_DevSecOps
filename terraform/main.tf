@@ -327,10 +327,16 @@ resource "aws_db_instance" "main" {
   deletion_protection     = false       # Para dev; en prod sería true
 
   # Alta disponibilidad (lo dejamos en false para Floci/dev)
-  multi_az = false
+  multi_az = var.enable_high_availability
 
   # Habilitar exportación de logs a CloudWatch (seguridad y auditoría)
   enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
+  
+  auto_minor_version_upgrade = true
+
+  copy_tags_to_snapshot = true
+
+
 
   tags = {
     Name        = "${var.project_name}-db"
@@ -352,7 +358,6 @@ resource "aws_ecr_repository" "app" {
     scan_on_push = true
   }
 
-  # Cifrado de las imágenes en reposo
   encryption_configuration {
     encryption_type = "AES256"
   }
@@ -705,4 +710,23 @@ resource "aws_iam_role_policy" "execution_read_secret" {
   name   = "${var.project_name}-execution-read-secret"
   role   = aws_iam_role.ecs_execution_role.id
   policy = data.aws_iam_policy_document.read_db_secret.json
+}
+
+# ============================================================
+# Cierra el security group DEFAULT de la VPC (buena práctica)
+# Aunque no lo usamos, lo dejamos sin reglas para que nada
+# lo tome por defecto con permisos amplios.
+# ============================================================
+resource "aws_default_security_group" "default" {
+  vpc_id = aws_vpc.main.id
+
+  # Sin bloques ingress/egress = sin reglas = todo bloqueado
+  # (AWS lo interpreta como "denegar todo")
+
+  tags = {
+    Name        = "${var.project_name}-default-sg-restricted"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
 }
