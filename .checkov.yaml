@@ -1,32 +1,40 @@
-# Configuración de Checkov para el proyecto e-commerce DevSecOps
-# https://www.checkov.io/2.Basics/CLI%20Command%20Reference.html
+# Configuracion de Checkov para el proyecto e-commerce DevSecOps
 
-# Frameworks a escanear (los mismos que pasamos por CLI, aquí como fallback)
 framework:
   - dockerfile
   - github_actions
   - secrets
+  - terraform
 
-
-# Directorios/archivos excluidos del escaneo
 skip-path:
-  - system/          # CodeIgniter 4 core, no lo controlamos
-  - vendor/          # dependencias de Composer
+  - system/
+  - vendor/
   - node_modules/
   - writable/
   - tests/
   - .git/
 
-# Checks silenciados con justificación
-# (Iremos agregando estos IDs a medida que Checkov nos marque cosas y decidamos aceptarlas)
-skip-check: []
-  # Ejemplo cuando decidas aceptar uno:
-  # - CKV_DOCKER_2   # Healthcheck ya definido en docker-compose.yml, no en Dockerfile
+skip-check:
+  - CKV_AWS_130  # Subredes publicas DEBEN asignar IP publica: alojan el ALB. Cargas sensibles van en subredes privadas.
+  - CKV_AWS_260  # ALB acepta 0.0.0.0/0 en puerto 80: intencional, es el punto de entrada publico.
+  - CKV_AWS_382  # Egress abierto: comun en dev. Hardening futuro: restringir egress para prevenir exfiltracion.
+  - CKV_AWS_118  # Enhanced monitoring: agrega costo, no aporta en dev. Se activaria en produccion.
+  - CKV_AWS_161  # IAM database auth: dev usa password en Secrets Manager. Se evaluaria en produccion.
+  - CKV_AWS_293  # Deletion protection off: intencional para permitir terraform destroy en dev.
+  - CKV_AWS_136  # Cifrado KMS: el cifrado de ECR es inmutable y el emulador no soporta recrearlo. AES256 ya provee cifrado robusto.
+  - CKV_AWS_338  # Retencion 1 anio: 30 dias alcanza para dev y controla costos.
+  - CKV_AWS_336  # Readonly root FS: CodeIgniter necesita escribir en writable/. Se resolveria con volumenes especificos.
+  - CKV_AWS_91   # Access logs: requieren bucket S3 dedicado. Hardening futuro.
+  - CKV_AWS_150  # Deletion protection off: intencional para permitir terraform destroy en dev.
+  - CKV_AWS_2    # ALB HTTPS: requiere certificado ACM + dominio real, no aplica en Floci/dev.
+  - CKV_AWS_103  # TLS 1.2: idem, requiere HTTPS con certificado real.
+  - CKV_AWS_378  # HTTP protocol: dev usa HTTP. En produccion listener HTTPS con redireccion.
+  - CKV_AWS_157  # Multi-AZ: soportado via variable enable_high_availability. Desactivado en dev/Floci (no lo emula), se activa en produccion.
+  - CKV2_AWS_20  # Redireccion HTTP a HTTPS: requiere listener HTTPS con certificado real.
+  - CKV2_AWS_28  # WAF: servicio adicional pago, fuera del alcance del proyecto.
+  - CKV2_AWS_64  # KMS key policy explicita: la policy default de AWS alcanza para dev.
+  - CKV2_AWS_11  # VPC flow logs: requieren log group/bucket dedicado. Hardening futuro.
+  - CKV2_AWS_57  # Rotacion automatica: requiere Lambda de rotacion. En dev la rotacion es manual.
 
-# Formato de salida por defecto
 compact: true
 quiet: false
-
-# Nivel mínimo de severidad a reportar
-# LOW | MEDIUM | HIGH | CRITICAL
-# Recomendado: dejar todo activo al inicio, filtrar después
