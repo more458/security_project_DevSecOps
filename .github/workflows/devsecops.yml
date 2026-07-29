@@ -69,7 +69,9 @@ jobs:
           echo "=== Corriendo Checkov ==="
           checkov \
             --directory . \
-            --framework dockerfile github_actions secrets \
+            --framework dockerfile github_actions secrets terraform \
+            --download-external-modules false \
+            --config-file .checkov.yaml \
             --output cli \
             --output sarif \
             --output-file-path console,checkov-results.sarif \
